@@ -207,8 +207,6 @@ while seed < 32768:
         count += 1
         print(
             f"{hex(seed)[2:].zfill(4)} {sim.data['MP attack'][0]} {sim.data['dex_increase']} {sim.brng.joker} {hex(prev_state(seed << 0x10))[2:].zfill(8)}")
-        # print(hex(seed), sim.data['MP attack'], sim.brng, hex(sim.initial_atbs[4]), hex(sim.initial_atbs[5]), "|",
-        #       hex(prev_state(seed << 0x10))[2:])
     seed += 1
 
 print(f"count: {count}")
