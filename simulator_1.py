@@ -94,8 +94,6 @@ class Simulator:
         rand3 = self.brng.rand16_percent()  # 5dde29 (Hit Random %)
         if not (rand3 < hitPercent):
             # miss
-            # print(
-            #     f"Miss: {self.initial_seed} state: {hex(prev_state(self.initial_seed << 0x10))} joker: {self.brng.joker}")
             raise Fail
 
         rand4 = self.brng.rand16()  # 5de05c (Crit Check)

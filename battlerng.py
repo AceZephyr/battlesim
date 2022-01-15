@@ -53,6 +53,9 @@ class BattleRNG:
             r = 0xb
         return r
 
+    def rand8_damage_roll(self, damage):
+        return max((self.rand8() + 0xf01) * damage >> 0xC, 1)
+
     def rand16(self):
         rand1 = self.rand8()
         j = self.joker & 7
