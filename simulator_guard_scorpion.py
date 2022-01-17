@@ -1,6 +1,6 @@
 from battlerng import *
 
-MENU_FRAMES = 5
+MENU_FRAMES = 4
 STAT_ROLL_ARR = [0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3]
 HP_ROLL_ARR = [40, 50, 50, 60, 70, 80, 90, 100, 110, 120, 130, 150]
 MP_ROLL_ARR = [20, 30, 30, 50, 70, 80, 90, 100, 110, 120, 140, 160]
@@ -17,6 +17,7 @@ class Simulator:
         self.brng = BattleRNG(seed=seed, joker=joker)
         self.char_states = []
         self.queue = []
+        self.temp_queue = []
         self.player_queue = []
         self.frame_count = 0
         self.opening_frames_remain = 62
@@ -36,6 +37,7 @@ class Simulator:
         self.menu_frames = 0
 
         self.current_attacker = None
+        self.char_for_next_turn = None
         self.current_animation_frames = 0
 
         self.guard_scorpion_phase = 0
@@ -43,6 +45,10 @@ class Simulator:
         self.data["cloud_hits"] = 0
         self.data["gs_attacks"] = []
         self.data["gs_scope_1"] = False  # used to prevent barret from cuing an attack before scorp's first attack
+
+        self.scorp_adjusts = []
+        for x in [1, 3, 5]:
+            self.scorp_adjusts.append(1 if self.initial_attack_order[x] == 1 else 0)
 
         self.battle_handlers = {
             0: self.cloud_battle_handler,
@@ -74,7 +80,7 @@ class Simulator:
         raise Success
 
     def add_to_battle_queue(self, char: int):
-        self.queue.append(char)
+        self.temp_queue.append(char)
 
     def pop_from_battle_queue(self):
         return self.queue.pop(0)
@@ -106,7 +112,7 @@ class Simulator:
 
         self.damage(damage)
 
-        self.current_animation_frames = 74
+        self.current_animation_frames = 73
 
     def barret_battle_handler(self):
         self.current_attacker = 1
@@ -126,7 +132,7 @@ class Simulator:
         rand5 = self.brng.rand8_damage_roll(0x1A)  # 5de80e (Damage Roll)
         self.damage(rand5)
 
-        self.current_animation_frames = 44
+        self.current_animation_frames = 43
 
     def cloud_braver_battle_handler(self):
         self.current_attacker = 0
@@ -153,7 +159,7 @@ class Simulator:
         if self.hp > 0:
             raise Fail
 
-        self.current_animation_frames = 44
+        self.current_animation_frames = 43
 
     def guard_scorpion_battle_handler(self):
         self.current_attacker = 4
@@ -174,7 +180,7 @@ class Simulator:
             if not self.data.get("gs_scope", False):
                 self.current_animation_frames = 138
             else:
-                self.current_animation_frames = 135
+                self.current_animation_frames = 135 + self.scorp_adjusts.pop(0) * 1
         else:
             # attack
             rand1 = self.brng.rand16()
@@ -206,7 +212,7 @@ class Simulator:
                 rand4 = self.brng.rand16()  # 5de05c (Crit Check)
                 rand5 = self.brng.rand8_damage_roll(0x44)  # 5de80e (Damage Roll)
 
-                self.current_animation_frames = 114
+                self.current_animation_frames = 113 + self.scorp_adjusts.pop(0) * 2
             else:
                 # scorpion tail
                 hitPercent = 0x6C
@@ -223,15 +229,15 @@ class Simulator:
                 rand5 = self.brng.rand8_damage_roll(0x44)  # 5de80e (Damage Roll)
 
                 if is_first_attack:
-                    self.current_animation_frames = 112
+                    self.current_animation_frames = 111 + self.scorp_adjusts.pop(0) * 2
                 else:
-                    self.current_animation_frames = 102
+                    self.current_animation_frames = 101 + self.scorp_adjusts.pop(0) * 2
         self.guard_scorpion_phase += 1
 
     def after_guard_scorpion_search_scope_battle_handler(self):
         self.brng.incr_rng_idx()
         self.data["gs_scope"] = True
-        self.current_animation_frames = 1
+        self.current_animation_frames = 0
         self.next_func = None
 
     def add_player_to_player_queue(self, charSlot):
@@ -271,19 +277,20 @@ class Simulator:
                 self.current_animation_frames = 67
             elif self.next_func is not None:
                 self.next_func()
+            elif self.char_for_next_turn is not None:
+                self.current_attacker = 0 if self.char_for_next_turn == 2 else self.char_for_next_turn
+                if self.char_states[self.current_attacker]:
+                    self.battle_handlers[self.char_for_next_turn]()
+                self.char_for_next_turn = None
             elif len(self.queue) > 0:
                 if self.current_attacker is not None:
                     self.atbs[self.current_attacker] = 0
-                    # if self.current_attacker == 4:
-                    #     self.data["cloud_hits"] += 1
                 if 2 in self.queue:
                     char = 2
                     self.queue.remove(2)
                 else:
                     char = self.pop_from_battle_queue()
-                self.current_attacker = 0 if char == 2 else char
-                if self.char_states[self.current_attacker]:
-                    self.battle_handlers[char]()
+                self.char_for_next_turn = char
             if len(self.player_queue) > 0:
                 if self.menu_frames > 0:
                     self.menu_frames -= 1
@@ -298,6 +305,8 @@ class Simulator:
                             break
             for i in range(4):
                 self.tick()
+            while len(self.temp_queue) > 0:
+                self.queue.append(self.temp_queue.pop(0))
 
     def run(self):
         try:
@@ -315,32 +324,34 @@ class Simulator:
         except Success:
             return True
 
+
 ATTACK_ORDERS = [
-    (0, 0, 1, 0, 1, 0, 1, 0, 1, 2),
-    (0, 0, 1, 0, 1, 1, 0, 0, 1, 2),
-    (0, 0, 1, 1, 0, 0, 1, 0, 1, 2),
-    (0, 0, 1, 1, 0, 1, 0, 0, 1, 2),
-    (0, 1, 0, 0, 1, 0, 1, 0, 1, 2),
-    (0, 1, 0, 0, 1, 1, 0, 0, 1, 2),
-    (0, 1, 0, 1, 0, 0, 1, 0, 1, 2),
-    (0, 1, 0, 1, 0, 1, 0, 0, 1, 2),
+    (0, 0, 1, 0, 1, 0, 1, 0, 1, 2),  # 0
+    (0, 0, 1, 0, 1, 1, 0, 0, 1, 2),  # 1
+    (0, 0, 1, 1, 0, 0, 1, 0, 1, 2),  # 2
+    (0, 0, 1, 1, 0, 1, 0, 0, 1, 2),  # 3
+    (0, 1, 0, 0, 1, 0, 1, 0, 1, 2),  # 4
+    (0, 1, 0, 0, 1, 1, 0, 0, 1, 2),  # 5
+    (0, 1, 0, 1, 0, 0, 1, 0, 1, 2),  # 6
+    (0, 1, 0, 1, 0, 1, 0, 0, 1, 2),  # 7
 ]
 
-# sim = Simulator(0x1FA, 6, DEX_7, list(ATTACK_ORDERS[0]))
-# ret = sim.run()
+if __name__ == '__main__':
+    sim = Simulator(rand(0xf16cf641), 0, DEX_7, list(ATTACK_ORDERS[3]))
+    ret = sim.run()
 
-# seed = 0x078d
-count = 0
-for seed in range(32768):
-    # print(f"seed: {hex(seed)}")
-    for joker in range(8):
-        for attack_order_index in range(len(ATTACK_ORDERS)):
-            attack_order = ATTACK_ORDERS[attack_order_index]
-            sim = Simulator(seed, joker, DEX_7, list(attack_order))
-            ret = sim.run()
-            if ret:
-                count += 1
-                print(
-                    f"{hex(seed)[2:].zfill(4)} {sim.brng.joker} {joker} {attack_order_index} {hex(prev_state(seed << 0x10))[2:].zfill(8)} {sim.data['gs_attacks']}")
+    # seed = 0x078d
+    count = 0
+    for seed in range(32768):
+        # print(f"seed: {hex(seed)}")
+        for joker in range(8):
+            for attack_order_index in range(len(ATTACK_ORDERS)):
+                attack_order = ATTACK_ORDERS[attack_order_index]
+                sim = Simulator(seed, joker, DEX_7, list(attack_order))
+                ret = sim.run()
+                if ret:
+                    count += 1
+                    print(
+                        f"{hex(seed)[2:].zfill(4)} {sim.brng.joker} {joker} {attack_order_index} {hex(prev_state(seed << 0x10))[2:].zfill(8)} {sim.data['gs_attacks']}")
 
-print(f"count: {count}")
+    print(f"count: {count}")
