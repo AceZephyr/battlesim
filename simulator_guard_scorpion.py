@@ -45,6 +45,9 @@ class Simulator:
         self.data["cloud_hits"] = 0
         self.data["gs_attacks"] = []
         self.data["gs_scope_1"] = False  # used to prevent barret from cuing an attack before scorp's first attack
+        self.data["rolls_cloud"] = []
+        self.data["rolls_barret"] = []
+        self.data["rolls_gs"] = []
 
         self.scorp_adjusts = []
         for x in [1, 3, 5]:
@@ -111,6 +114,7 @@ class Simulator:
         damage = rand3 * 2
 
         self.damage(damage)
+        self.data["rolls_cloud"].append(damage)
 
         self.current_animation_frames = 73
 
@@ -131,6 +135,7 @@ class Simulator:
         rand4 = self.brng.rand16()  # 5de05c (Crit Check)
         rand5 = self.brng.rand8_damage_roll(0x1A)  # 5de80e (Damage Roll)
         self.damage(rand5)
+        self.data["rolls_barret"].append(rand5)
 
         self.current_animation_frames = 43
 
@@ -272,7 +277,6 @@ class Simulator:
             elif self.victory_fanfare:
                 self.post_battle_victory()
             elif self.victory:
-                # self.data["jokers"].append(self.brng.joker)
                 self.victory_fanfare = True
                 self.current_animation_frames = 67
             elif self.next_func is not None:
@@ -337,13 +341,8 @@ ATTACK_ORDERS = [
 ]
 
 if __name__ == '__main__':
-    sim = Simulator(rand(0xf16cf641), 0, DEX_7, list(ATTACK_ORDERS[3]))
-    ret = sim.run()
-
-    # seed = 0x078d
     count = 0
     for seed in range(32768):
-        # print(f"seed: {hex(seed)}")
         for joker in range(8):
             for attack_order_index in range(len(ATTACK_ORDERS)):
                 attack_order = ATTACK_ORDERS[attack_order_index]
